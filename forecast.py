@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
-
+from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.holtwinters import SimpleExpSmoothing
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 def constant_model():
     """
@@ -17,7 +19,7 @@ def constant_model():
     mean = 0
     avg, demand_lst = cm_avg_data()
     std = cm_std_data(demand_lst)
-    ind_rnd_dev = random.gauss(mean, std)
+    ind_rnd_dev = random.gauss(mean, float(std))
     plot_dec = input("Want to plot the Gaussian Graph? (y/n): ")
     if plot_dec == "y":
         plot_gauss(mean, std)
@@ -42,7 +44,7 @@ def cm_std_data(demand_lst):
 def read_csv():
     path = "C:/Users/Lucas/wh_data.csv"
     normPath = path.replace(os.sep, '/')
-    df = pd.read_csv(normPath, index_col='period')
+    df = pd.read_csv(normPath, parse_dates=True, index_col=0, sep=';')
     return df
 
 
@@ -60,11 +62,32 @@ def expo_smoothing_model():
     by Axsäter in section 2.5. The here implemented method takes the least square regression of demand/forecast errors.
     """
     df = read_csv()
-    demand_lst = df['demand'].tolist()
-    #forecast_lst = dataset['forecast'].tolist()
-    # let initial alpha at the end of period 15 be 0.2 and beta 0.1
-    alpha = 1 / (2 * len(demand_lst))
-    print(df.shape())
+    #let initial alpha at the end of period 15 be 0.2 and beta 0.1
+    print(df.shape)
+    df.sort_index(inplace=True)
+    decompose_result = seasonal_decompose(df['demand'],model='multiplicative',period=1)
+    decompose_result.plot()
+    plt.show()
+    x = 48
+    alpha = 0.3
+    df['HWSE1'] = SimpleExpSmoothing(df['demand']).fit(smoothing_level=alpha, optimized=False, use_brute=True).fittedvalues
+    df[['demand', 'HWSE1']].plot(title='Holt Winter Single Exponential Smoothing Graph')
+    plt.show()
+    #double exponential smoothing of dataset (multiplicative and additive)
+    df['HWSE2_ADD'] = ExponentialSmoothing(df['demand'], trend='add').fit().fittedvalues
+    df['HWSE2_MUL'] = ExponentialSmoothing(df['demand'], trend='mul').fit().fittedvalues
+    df[['demand', 'HWSE2_ADD', 'HWSE2_MUL']].plot(title='Holt Winter Double Exponential Smoothing Graph - Additive '
+                                                        'and Multiplicative Trend')
+    train_demand = df[:36]
+    test_demand = df[36:]
+
+    fitted_model = ExponentialSmoothing(train_demand['demand'], trend='mul', seasonal='mul', seasonal_periods=4).fit()
+    test_predictions = fitted_model.forecast(12)
+    train_demand['demand'].plot(legend=True,label='Train')
+    test_demand['demand'].plot(legend=True, label='Test',figsize=(6,4))
+    test_predictions.plot(legend=True,label='Prediction')
+    plt.title('Train, Test, Prediction data points using Holt Winters Exponential Smoothing')
+    plt.show()
     return
 
 
