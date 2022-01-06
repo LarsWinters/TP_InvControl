@@ -1,3 +1,4 @@
+import math
 import os
 import random
 import matplotlib.pyplot as plt
@@ -6,8 +7,8 @@ import pandas as pd
 from scipy.stats import norm
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.holtwinters import SimpleExpSmoothing
-from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from sklearn.metrics import mean_absolute_error,mean_squared_error
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 def constant_model():
     """
@@ -64,48 +65,71 @@ def expo_smoothing_model():
     """
     df = read_csv()
     #let initial alpha at the end of period 15 be 0.2 and beta 0.1
-    print(df.shape)
     df.sort_index(inplace=True)
     decompose_result = seasonal_decompose(df['demand'],model='multiplicative')
     decompose_result.plot()
     plt.show()
 
-    alpha = 0.3
+    # set frequency of the date time index as monthly
+    df.index.freq = 'MS'
+    """
+    setting alpha to 0.3 according to the recommendation of Axsäter:
+    Small alpha values need a longer time till the forecast is reliable
+    Therefore, for our initial forecast we chose a rather large alpha
+    """
+    alpha = 0.2
     #single exponential smoothing
-    df['HWSE1'] = SimpleExpSmoothing(df['demand']).fit(smoothing_level=alpha, optimized=False, use_brute=True).fittedvalues
-    df[['demand', 'HWSE1']].plot(title='Holt Winter Single Exponential Smoothing Graph')
+    df['HWES1'] = SimpleExpSmoothing(df['demand']).fit(smoothing_level=alpha, optimized=False, use_brute=True).fittedvalues
+    df[['demand', 'HWES1']].plot(title='Holt Winter Single Exponential Smoothing Graph')
     plt.show()
     #double exponential smoothing of dataset (multiplicative and additive trend)
-    df['HWSE2_ADD'] = ExponentialSmoothing(df['demand'], trend='add').fit().fittedvalues
-    df['HWSE2_MUL'] = ExponentialSmoothing(df['demand'], trend='mul').fit().fittedvalues
-    df[['demand', 'HWSE2_ADD', 'HWSE2_MUL']].plot(title='Holt Winter Double Exponential Smoothing Graph - Additive '
+    df['HWES2_ADD'] = ExponentialSmoothing(df['demand'], trend='add').fit().fittedvalues
+    df['HWES2_MUL'] = ExponentialSmoothing(df['demand'], trend='mul').fit().fittedvalues
+    df[['demand', 'HWES2_ADD', 'HWES2_MUL']].plot(title='Holt Winter Double Exponential Smoothing Graph - Additive '
                                                         'and Multiplicative Trend')
+    plt.show()
+
+    #triple HWES
+    df['HWES3_ADD'] = ExponentialSmoothing(df['demand'],trend='add',seasonal='add',seasonal_periods=12).fit().fittedvalues
+    df['HWES3_MUL'] = ExponentialSmoothing(df['demand'], trend='mul', seasonal='mul',seasonal_periods=12).fit().fittedvalues
+    df[['demand','HWES3_ADD','HWES3_MUL']].plot(title='Holt Winters Triple Exponential Smoothing: Additive and '
+                                                      'Multiplicative Trend')
+    plt.show()
+
+    # splitting into train/test data
     train_demand = df[:42]
     test_demand = df[42:]
 
+    # Triple ES - with trend, seasonal + Forecasting
     fitted_model = ExponentialSmoothing(train_demand['demand'], trend='mul', seasonal='mul', seasonal_periods=12).fit()
     test_predictions = fitted_model.forecast(6)
     train_demand['demand'].plot(legend=True,label='Train')
-    #test_demand['demand'].plot(legend=True, label='Test',figsize=(6,4))
+    test_demand['demand'].plot(legend=True, label='Test',figsize=(6,4))
     test_predictions.plot(legend=True,label='Prediction')
     plt.title('Train, Test, Prediction data points using Holt Winters Exponential Smoothing')
     plt.show()
 
+    # plot prediction - test demand
+    """
+    test_demand.plot(legend=True,label='Test',figsize=(9,6))
+    test_predictions.plot(legend=True,label='Prediction',xlim=['2021-07-01','2021-12-01'])
+    plt.show()
+    """
+
     #evaluation
-    print(f'Mean Absolute Error = {mean_absolute_error(test_demand["demand"], test_predictions)}')
-    print(f'Mean Squared Error = {mean_squared_error(test_demand["demand"], test_predictions)}')
-    test_df = test_demand.tail(6)
-    comparison = pd.concat(test_df, test_predictions, keys=["true demand", "prediction"])
-    print(comparison)
+    rmse = round(math.sqrt(mean_squared_error(test_demand["demand"], test_predictions)),2)
+    print(f'Mean Absolute Error = {round(mean_absolute_error(test_demand["demand"], test_predictions),2)}')
+    print(f'Mean Squared Error = {round(mean_squared_error(test_demand["demand"], test_predictions),2)}')
+    print(f'Root mean squared error = {round(math.sqrt(mean_squared_error(test_demand["demand"], test_predictions)),2)}')
     # export results in csv
-    export_predictions = fitted_model.forecast((12))
+    export_predictions = fitted_model.forecast(12)
     export_predictions = round(pd.DataFrame(export_predictions), 0)
     try:
         export_predictions.to_csv('export_predictions.csv', index=True, sep=';')
     except:
         print("Error occured during csv export")
-    print(round(export_predictions, 0))
-    return
+    #print(round(export_predictions, 0))
+    return rmse
 
 
 def forecast_demand():
@@ -117,7 +141,8 @@ def forecast_demand():
         forecast = constant_model()
         print("\nThe forecast for the next period is:", round(forecast, 0))
     else:
-        expo_smoothing_model()
+        rmse = expo_smoothing_model()
+        print("The Forecast Error measured as Root mean squared error (RMSE) is:", rmse, "Units. This can be used as Safety Stock.")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 from scipy.stats import norm
+import math
 
 def check_sl_input(SL):
     try:
