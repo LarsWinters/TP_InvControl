@@ -63,6 +63,7 @@ def expo_smoothing_model():
     Forecasting with a regression model is an alternative technique to the exponential smoothing with trend described
     by Axsäter in section 2.5. The here implemented method takes the least square regression of demand/forecast errors.
     """
+    #input of path in read_csv()
     df = read_csv()
     #let initial alpha at the end of period 15 be 0.2 and beta 0.1
     df.sort_index(inplace=True)
