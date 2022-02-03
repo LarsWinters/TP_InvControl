@@ -78,7 +78,7 @@ def expo_smoothing_model():
     Small alpha values need a longer time till the forecast is reliable
     Therefore, for our initial forecast we chose a rather large alpha
     """
-    alpha = 0.2
+    alpha = 0.3
     #single exponential smoothing
     df['HWES1'] = SimpleExpSmoothing(df['demand']).fit(smoothing_level=alpha, optimized=False, use_brute=True).fittedvalues
     df[['demand', 'HWES1']].plot(title='Holt Winter Single Exponential Smoothing Graph')
